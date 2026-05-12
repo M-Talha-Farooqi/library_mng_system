@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Library Subscription — REST API Demo</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --card: #ffffff;
+    --ink: #1d2433;
+    --muted: #5a6478;
+    --border: #e3e6ec;
+    --get:    #2563eb;
+    --post:   #16a34a;
+    --put:    #d97706;
+    --patch:  #9333ea;
+    --delete: #dc2626;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 32px 16px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg); color: var(--ink); line-height: 1.5;
+  }
+  .container { max-width: 960px; margin: 0 auto; }
+  h1 { margin: 0 0 4px; font-size: 28px; }
+  .subtitle { color: var(--muted); margin: 0 0 28px; }
+
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 20px; margin-bottom: 20px;
+  }
+  .card h2 { margin: 0 0 14px; font-size: 18px; }
+
+  .method {
+    display: inline-block; font-family: ui-monospace, Menlo, monospace;
+    font-size: 11px; font-weight: 700; color: white;
+    padding: 2px 8px; border-radius: 4px; margin-right: 6px;
+    letter-spacing: 0.5px;
+  }
+  .m-get    { background: var(--get); }
+  .m-post   { background: var(--post); }
+  .m-put    { background: var(--put); }
+  .m-patch  { background: var(--patch); }
+  .m-delete { background: var(--delete); }
+
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  label { font-size: 13px; color: var(--muted); display: block; margin-bottom: 4px; }
+  input, select {
+    width: 100%; padding: 8px 10px; border: 1px solid var(--border);
+    border-radius: 6px; font-size: 14px; background: white;
+  }
+  .field { flex: 1 1 180px; }
+
+  button {
+    padding: 8px 14px; border-radius: 6px; border: none; cursor: pointer;
+    font-size: 13px; font-weight: 600; color: white; transition: opacity 0.15s;
+  }
+  button:hover { opacity: 0.88; }
+  .b-get    { background: var(--get); }
+  .b-post   { background: var(--post); }
+  .b-put    { background: var(--put); }
+  .b-patch  { background: var(--patch); }
+  .b-delete { background: var(--delete); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { padding: 10px 8px; text-align: left; border-bottom: 1px solid var(--border); }
+  th { font-weight: 600; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+  td .actions { display: flex; gap: 6px; flex-wrap: wrap; }
+  td img { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; vertical-align: middle; }
+
+  .log {
+    background: #0f172a; color: #cbd5e1; font-family: ui-monospace, Menlo, monospace;
+    font-size: 12px; padding: 14px; border-radius: 8px; max-height: 240px;
+    overflow-y: auto; white-space: pre-wrap; word-break: break-all;
+  }
+  .log .ok    { color: #4ade80; }
+  .log .err   { color: #f87171; }
+  .log .req   { color: #fbbf24; }
+  .badge-active   { color: #16a34a; font-weight: 600; }
+  .badge-inactive { color: #94a3b8; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <h1>📚 Library Subscription</h1>
+  <p class="subtitle">
+    A small demo of all REST HTTP methods. Every action below is labeled with
+    the method it sends. Open <a href="/docs" target="_blank">/docs</a> for the
+    auto-generated Swagger UI.
+  </p>
+
+  <div class="card">
+    <h2><span class="method m-post">POST</span> Add a new subscriber</h2>
+    <div class="row">
+      <div class="field">
+        <label>Name</label>
+        <input id="newName" placeholder="e.g. Sara Iqbal" />
+      </div>
+      <div class="field">
+        <label>Email</label>
+        <input id="newEmail" type="email" placeholder="sara@example.com" />
+      </div>
+      <div class="field">
+        <label>Membership</label>
+        <select id="newMembership">
+          <option value="basic">basic</option>
+          <option value="premium">premium</option>
+          <option value="student">student</option>
+        </select>
+      </div>
+      <div style="align-self: end;">
+        <button class="b-post" onclick="createSubscriber()">Create</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>
+      <span class="method m-get">GET</span> All subscribers
+      <button class="b-get" style="float:right;" onclick="loadSubscribers()">Refresh</button>
+    </h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Photo</th>
+          <th>ID</th>
+          <th>Name</th>
+          <th>Email</th>
+          <th>Membership</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>Request log</h2>
+    <div id="log" class="log">Ready. Try adding a subscriber above.</div>
+  </div>
+
+</div>
+
+<script>
+  const API = "/subscribers";
+
+  const logEl = document.getElementById("log");
+  function log(method, url, status, body) {
+    const time = new Date().toLocaleTimeString();
+    const statusClass = status >= 200 && status < 300 ? "ok" : "err";
+    const bodyStr = body !== undefined ? (typeof body === "string" ? body : JSON.stringify(body, null, 2)) : "";
+    logEl.innerHTML =
+      `[${time}] <span class="req">${method} ${url}</span> -> <span class="${statusClass}">${status}</span>\n` +
+      (bodyStr ? bodyStr + "\n\n" : "\n") +
+      logEl.innerHTML;
+  }
+
+  async function api(method, path, options = {}) {
+    const res = await fetch(API + path, { method, ...options });
+    let body;
+    try { body = await res.json(); } catch { body = null; }
+    log(method, API + path, res.status, body);
+    if (!res.ok) throw new Error(body?.detail || `${method} failed`);
+    return body;
+  }
+
+  async function loadSubscribers() {
+    const list = await api("GET", "");
+    const tbody = document.getElementById("tableBody");
+    tbody.innerHTML = list.map(s => `
+      <tr>
+        <td>${s.photo_url
+            ? `<img src="${s.photo_url}" alt="" />`
+            : `<span style="color:#cbd5e1;">—</span>`}</td>
+        <td>${s.id}</td>
+        <td>${escapeHtml(s.name)}</td>
+        <td>${escapeHtml(s.email)}</td>
+        <td>${s.membership_type}</td>
+        <td>${s.active
+            ? '<span class="badge-active">● active</span>'
+            : '<span class="badge-inactive">○ inactive</span>'}</td>
+        <td>
+          <div class="actions">
+            <button class="b-put"    onclick="replaceSubscriber(${s.id})"     title="Replace whole record">PUT</button>
+            <button class="b-patch"  onclick="toggleActive(${s.id}, ${s.active})" title="Toggle active flag">PATCH</button>
+            <button class="b-delete" onclick="deleteSubscriber(${s.id})">DELETE</button>
+            <button class="b-post"   onclick="uploadPhoto(${s.id})"            title="Upload photo (POST)">POST photo</button>
+          </div>
+        </td>
+      </tr>
+    `).join("");
+  }
+
+  async function createSubscriber() {
+    const name = document.getElementById("newName").value.trim();
+    const email = document.getElementById("newEmail").value.trim();
+    const membership_type = document.getElementById("newMembership").value;
+    if (!name || !email) { alert("Name and email are required."); return; }
+
+    try {
+      await api("POST", "", {
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email, membership_type, active: true }),
+      });
+      document.getElementById("newName").value = "";
+      document.getElementById("newEmail").value = "";
+      await loadSubscribers();
+    } catch (e) {}
+  }
+
+  async function replaceSubscriber(id) {
+    const name  = prompt("New name (PUT replaces ALL fields):");
+    if (name === null) return;
+    const email = prompt("New email:");
+    if (email === null) return;
+    const membership_type = prompt("Membership (basic / premium / student):", "basic");
+    if (membership_type === null) return;
+
+    try {
+      await api("PUT", `/${id}`, {
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email, membership_type, active: true }),
+      });
+      await loadSubscribers();
+    } catch (e) {}
+  }
+
+  async function toggleActive(id, currentlyActive) {
+    try {
+      await api("PATCH", `/${id}`, {
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ active: !currentlyActive }),
+      });
+      await loadSubscribers();
+    } catch (e) {}
+  }
+
+  async function deleteSubscriber(id) {
+    if (!confirm(`Delete subscriber #${id}?`)) return;
+    try {
+      await api("DELETE", `/${id}`);
+      await loadSubscribers();
+    } catch (e) {}
+  }
+
+  async function uploadPhoto(id) {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/jpeg,image/png,image/webp";
+    input.onchange = async () => {
+      const file = input.files[0];
+      if (!file) return;
+      const form = new FormData();
+      form.append("file", file);
+      try {
+        await api("POST", `/${id}/photo`, { body: form });
+        await loadSubscribers();
+      } catch (e) {}
+    };
+    input.click();
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+    }[c]));
+  }
+
+  loadSubscribers();
+</script>
+</body>
+</html>
